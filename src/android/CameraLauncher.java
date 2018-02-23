@@ -552,12 +552,10 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                         Uri imageUri = this.imageUri.getFileUri();
                         writeUncompressedImage(imageUri, uri);
                     }
-                    
+
                     this.callbackContext.success(uri.toString());
                 }
             } else {
-
-                LOG.i(LOG_TAG, "processResultFromCamera 1");
 
                 String filename = System.currentTimeMillis() + "";
                 Uri uri = Uri.fromFile(createCaptureFile(this.encodingType, filename));
@@ -569,8 +567,30 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     Uri imageUri = this.imageUri.getFileUri();
                     writeUncompressedImage(imageUri, uri);
                 }
+                ////////***********************
 
-                LOG.i(LOG_TAG, "processResultFromCamera 2");
+                // figure out the original width and height of the image
+                BitmapFactory.Options options = new BitmapFactory.Options();
+                options.inJustDecodeBounds = true;
+                InputStream fileStream = null;
+                try {
+                    fileStream = FileHelper.getInputStreamFromUriString(uri.toString(), cordova);
+                    BitmapFactory.decodeStream(fileStream, null, options);
+                } finally {
+                    if (fileStream != null) {
+                        try {
+                            fileStream.close();
+                        } catch (IOException e) {
+                            LOG.d(LOG_TAG, "Exception while closing file input stream.");
+                        }
+                    }
+                }
+
+                LOG.i(LOG_TAG, options.outWidth );
+                LOG.i(LOG_TAG, options.outHeight );
+
+                //******************************
+
 
                 String tb_filename = "s_" + filename;
                 Uri tb_uri = Uri.fromFile(createCaptureFile(this.encodingType, tb_filename + ""));
@@ -583,7 +603,6 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     return;
                 }
 
-                LOG.i(LOG_TAG, "processResultFromCamera 3");
                 // Add compressed version of captured image to returned media store Uri
                 OutputStream os = this.cordova.getActivity().getContentResolver().openOutputStream(tb_uri);
                 CompressFormat compressFormat = encodingType == JPEG ?
@@ -592,8 +611,6 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
                 bitmap.compress(compressFormat, this.mQuality, os);
                 os.close();
-
-                LOG.i(LOG_TAG, "processResultFromCamera 4");
 
                 // Restore exif data to file
                 if (this.encodingType == JPEG) {
@@ -610,10 +627,10 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     JSONObject success = new JSONObject();
                     JSONObject original = new JSONObject();
                     JSONObject thumbnail = new JSONObject();
-                    original.put("uri", uri.toString() );
+                    original.put("path", uri.toString() );
                     original.put("dimensions", "" );
 
-                    thumbnail.put("uri", uri.toString() );
+                    thumbnail.put("path", tb_uri.toString() );
                     thumbnail.put("dimensions", "" );
 
 
