@@ -508,12 +508,8 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             refreshGallery(galleryUri);
         }
 
-        LOG.e(LOG_TAG, "processResultFromCamera 0");
-
         // If sending base64 image back
         if (destType == DATA_URL) {
-            LOG.e(LOG_TAG, "processResultFromCamera 1");
-            
             bitmap = getScaledAndRotatedBitmap(sourcePath);
 
             if (bitmap == null) {
@@ -534,27 +530,20 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             if (!this.saveToPhotoAlbum) {
                 checkForDuplicateImage(DATA_URL);
             }
-            
-            
         }
-
-        
 
         // If sending filename back
         else if (destType == FILE_URI || destType == NATIVE_URI) {
             // If all this is true we shouldn't compress the image.
-            LOG.e(LOG_TAG, "processResultFromCamera 2");
-            if (  !this.correctOrientation) {
-
-                LOG.e(LOG_TAG, "processResultFromCamera 3");
+            if (this.targetHeight == -1 && this.targetWidth == -1 && this.mQuality == 100 &&
+                    !this.correctOrientation) {
 
                 // If we saved the uncompressed photo to the album, we can just
                 // return the URI we already created
                 if (this.saveToPhotoAlbum) {
                     this.callbackContext.success(galleryUri.toString());
                 } else {
-                    String filename = System.currentTimeMillis() + "";
-                    Uri uri = Uri.fromFile(createCaptureFile(this.encodingType, filename));
+                    Uri uri = Uri.fromFile(createCaptureFile(this.encodingType, System.currentTimeMillis() + ""));
 
                     if (this.allowEdit && this.croppedUri != null) {
                         Uri croppedUri = Uri.fromFile(new File(getFileNameFromUri(this.croppedUri)));
@@ -563,71 +552,28 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                         Uri imageUri = this.imageUri.getFileUri();
                         writeUncompressedImage(imageUri, uri);
                     }
-
-                    ///////////////////////////////////////////////////////
-                    //extra stuff
-                    String tb_filename = "s_" + filename;
-                    bitmap = getScaledAndRotatedBitmap(sourcePath);
-                    // Double-check the bitmap.
-                    if (bitmap == null) {
-                        LOG.d(LOG_TAG, "I either have a null image path or bitmap");
-                        this.failPicture("Unable to create bitmap!");
-                        return;
-                    }
-
-                    Uri tb_uri = Uri.fromFile(createCaptureFile(this.encodingType, tb_filename));
-
-                    // Add compressed version of captured image to returned media store Uri
-                    OutputStream os = this.cordova.getActivity().getContentResolver().openOutputStream(tb_uri);
-                    CompressFormat compressFormat = encodingType == JPEG ?
-                            CompressFormat.JPEG :
-                            CompressFormat.PNG;
-
-                    bitmap.compress(compressFormat, 50, os);
-                    os.close();
-
-                    // Restore exif data to file
-                    if (this.encodingType == JPEG) {
-                        String exifPath;
-                        exifPath = uri.getPath();
-                        //We just finished rotating it by an arbitrary orientation, just make sure it's normal
-                        if(rotate != ExifInterface.ORIENTATION_NORMAL)
-                            exif.resetOrientation();
-                        exif.createOutFile(exifPath);
-                        exif.writeExifData();
-                    }
-
-                    try {
-                        JSONObject success = new JSONObject();
-                        JSONObject original = new JSONObject();
-                        JSONObject thumbnail = new JSONObject();
-                        original.put("uri", uri.toString() );
-                        original.put("dimensions", "" );
-
-                        thumbnail.put("uri", uri.toString() );
-                        thumbnail.put("dimensions", "" );
-
-
-                        success.put("original",original);
-                        success.put("thumbnail",thumbnail);
-                        JSONObject item = new JSONObject();
-
-                        // Send Uri back to JavaScript for viewing image
-                        this.callbackContext.success(success.toString());
-                    } catch (JSONException e) {
-                        //some exception handler code.
-                        e.printStackTrace();
-                    }
-
                     
-
-                    //this.callbackContext.success(uri.toString());
+                    this.callbackContext.success(uri.toString());
                 }
             } else {
 
-                LOG.e(LOG_TAG, "processResultFromCamera 4");
-                
-                Uri uri = Uri.fromFile(createCaptureFile(this.encodingType, System.currentTimeMillis() + ""));
+                LOG.i(LOG_TAG, "processResultFromCamera 1");
+
+                String filename = System.currentTimeMillis() + "";
+                Uri uri = Uri.fromFile(createCaptureFile(this.encodingType, filename));
+
+                if (this.allowEdit && this.croppedUri != null) {
+                    Uri croppedUri = Uri.fromFile(new File(getFileNameFromUri(this.croppedUri)));
+                    writeUncompressedImage(croppedUri, uri);
+                } else {
+                    Uri imageUri = this.imageUri.getFileUri();
+                    writeUncompressedImage(imageUri, uri);
+                }
+
+                LOG.i(LOG_TAG, "processResultFromCamera 2");
+
+                String tb_filename = "s_" + filename;
+                Uri tb_uri = Uri.fromFile(createCaptureFile(this.encodingType, tb_filename + ""));
                 bitmap = getScaledAndRotatedBitmap(sourcePath);
 
                 // Double-check the bitmap.
@@ -637,15 +583,17 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     return;
                 }
 
-
+                LOG.i(LOG_TAG, "processResultFromCamera 3");
                 // Add compressed version of captured image to returned media store Uri
-                OutputStream os = this.cordova.getActivity().getContentResolver().openOutputStream(uri);
+                OutputStream os = this.cordova.getActivity().getContentResolver().openOutputStream(tb_uri);
                 CompressFormat compressFormat = encodingType == JPEG ?
                         CompressFormat.JPEG :
                         CompressFormat.PNG;
 
                 bitmap.compress(compressFormat, this.mQuality, os);
                 os.close();
+
+                LOG.i(LOG_TAG, "processResultFromCamera 4");
 
                 // Restore exif data to file
                 if (this.encodingType == JPEG) {
@@ -658,8 +606,30 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     exif.writeExifData();
                 }
 
+                try {
+                    JSONObject success = new JSONObject();
+                    JSONObject original = new JSONObject();
+                    JSONObject thumbnail = new JSONObject();
+                    original.put("uri", uri.toString() );
+                    original.put("dimensions", "" );
+
+                    thumbnail.put("uri", uri.toString() );
+                    thumbnail.put("dimensions", "" );
+
+
+                    success.put("original",original);
+                    success.put("thumbnail",thumbnail);
+                    JSONObject item = new JSONObject();
+
+                    // Send Uri back to JavaScript for viewing image
+                    this.callbackContext.success(success.toString());
+                } catch (JSONException e) {
+                    //some exception handler code.
+                    e.printStackTrace();
+                }
+
                 // Send Uri back to JavaScript for viewing image
-                this.callbackContext.success(uri.toString());
+                //this.callbackContext.success(uri.toString());
 
             }
         } else {
