@@ -508,8 +508,12 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             refreshGallery(galleryUri);
         }
 
+        LOG.e(LOG_TAG, "processResultFromCamera 0");
+
         // If sending base64 image back
         if (destType == DATA_URL) {
+            LOG.e(LOG_TAG, "processResultFromCamera 1");
+            
             bitmap = getScaledAndRotatedBitmap(sourcePath);
 
             if (bitmap == null) {
@@ -530,12 +534,19 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             if (!this.saveToPhotoAlbum) {
                 checkForDuplicateImage(DATA_URL);
             }
+            
+            
         }
+
+        
 
         // If sending filename back
         else if (destType == FILE_URI || destType == NATIVE_URI) {
             // If all this is true we shouldn't compress the image.
+            LOG.e(LOG_TAG, "processResultFromCamera 2");
             if (  !this.correctOrientation) {
+
+                LOG.e(LOG_TAG, "processResultFromCamera 3");
 
                 // If we saved the uncompressed photo to the album, we can just
                 // return the URI we already created
@@ -613,6 +624,9 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     //this.callbackContext.success(uri.toString());
                 }
             } else {
+
+                LOG.e(LOG_TAG, "processResultFromCamera 4");
+                
                 Uri uri = Uri.fromFile(createCaptureFile(this.encodingType, System.currentTimeMillis() + ""));
                 bitmap = getScaledAndRotatedBitmap(sourcePath);
 
