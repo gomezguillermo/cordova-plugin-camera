@@ -567,7 +567,6 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     Uri imageUri = this.imageUri.getFileUri();
                     writeUncompressedImage(imageUri, uri);
                 }
-                ////////***********************
 
                 // figure out the original width and height of the image
                 BitmapFactory.Options options = new BitmapFactory.Options();
@@ -585,12 +584,6 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                         }
                     }
                 }
-
-                LOG.i(LOG_TAG, options.outWidth + "" );
-                LOG.i(LOG_TAG, options.outHeight + "" );
-
-                //******************************
-
 
                 String tb_filename = "s_" + filename;
                 Uri tb_uri = Uri.fromFile(createCaptureFile(this.encodingType, tb_filename + ""));
@@ -623,23 +616,46 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     exif.writeExifData();
                 }
 
+                // figure out the thumbnail width and height of the image
+                BitmapFactory.Options tb_options = new BitmapFactory.Options();
+                tb_options.inJustDecodeBounds = true;
+                InputStream tb_fileStream = null;
+                try {
+                    tb_fileStream = FileHelper.getInputStreamFromUriString(tb_uri.toString(), cordova);
+                    BitmapFactory.decodeStream(tb_fileStream, null, tb_options);
+                } finally {
+                    if (tb_fileStream != null) {
+                        try {
+                            tb_fileStream.close();
+                        } catch (IOException e) {
+                            LOG.d(LOG_TAG, "Exception while closing file input stream.");
+                        }
+                    }
+                }
+
                 try {
                     JSONObject success = new JSONObject();
                     JSONObject original = new JSONObject();
                     JSONObject thumbnail = new JSONObject();
+
                     original.put("path", uri.toString() );
-                    original.put("dimensions", "" );
-
+                    JSONObject ori_dimensions = new JSONObject();
+                    ori_dimensions.put("width", options.outWidth + "");
+                    ori_dimensions.put("height", options.outHeight + "");
+                    original.put("dimensions", ori_dimensions );
+                    
                     thumbnail.put("path", tb_uri.toString() );
-                    thumbnail.put("dimensions", "" );
-
+                    JSONObject tb_dimensions = new JSONObject();
+                    tb_dimensions.put("width", tb_options.outWidth + "");
+                    tb_dimensions.put("height", tb_options.outHeight + "");
+                    thumbnail.put("dimensions", tb_dimensions );
 
                     success.put("original",original);
                     success.put("thumbnail",thumbnail);
-                    JSONObject item = new JSONObject();
 
                     // Send Uri back to JavaScript for viewing image
                     this.callbackContext.success(success.toString());
+                    
                 } catch (JSONException e) {
                     //some exception handler code.
                     e.printStackTrace();
