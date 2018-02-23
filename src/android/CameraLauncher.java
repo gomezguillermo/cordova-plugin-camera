@@ -38,6 +38,7 @@ import org.apache.cordova.PermissionHelper;
 import org.apache.cordova.PluginResult;
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import android.Manifest;
 import android.annotation.TargetApi;
@@ -371,16 +372,16 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             if (this.allowEdit) {
                 intent.setAction(Intent.ACTION_PICK);
                 intent.putExtra("crop", "true");
-                if (targetWidth > 0) {
-                    intent.putExtra("outputX", targetWidth);
-                }
-                if (targetHeight > 0) {
-                    intent.putExtra("outputY", targetHeight);
-                }
-                if (targetHeight > 0 && targetWidth > 0 && targetWidth == targetHeight) {
-                    intent.putExtra("aspectX", 1);
-                    intent.putExtra("aspectY", 1);
-                }
+//                if (targetWidth > 0) {
+//                    intent.putExtra("outputX", targetWidth);
+//                }
+//                if (targetHeight > 0) {
+//                    intent.putExtra("outputY", targetHeight);
+//                }
+//                if (targetHeight > 0 && targetWidth > 0 && targetWidth == targetHeight) {
+//                    intent.putExtra("aspectX", 1);
+//                    intent.putExtra("aspectY", 1);
+//                }
                 File photo = createCaptureFile(JPEG);
                 croppedUri = Uri.fromFile(photo);
                 intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, croppedUri);
@@ -408,56 +409,56 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
     }
 
 
-  /**
-   * Brings up the UI to perform crop on passed image URI
-   *
-   * @param picUri
-   */
-  private void performCrop(Uri picUri, int destType, Intent cameraIntent) {
-    try {
-        Intent cropIntent = new Intent("com.android.camera.action.CROP");
-        // indicate image type and Uri
-        cropIntent.setDataAndType(picUri, "image/*");
-        // set crop properties
-        cropIntent.putExtra("crop", "true");
+    /**
+     * Brings up the UI to perform crop on passed image URI
+     *
+     * @param picUri
+     */
+    private void performCrop(Uri picUri, int destType, Intent cameraIntent) {
+        try {
+            Intent cropIntent = new Intent("com.android.camera.action.CROP");
+            // indicate image type and Uri
+            cropIntent.setDataAndType(picUri, "image/*");
+            // set crop properties
+            cropIntent.putExtra("crop", "true");
 
 
-        // indicate output X and Y
-        if (targetWidth > 0) {
-          cropIntent.putExtra("outputX", targetWidth);
+            // indicate output X and Y
+            if (targetWidth > 0) {
+                cropIntent.putExtra("outputX", targetWidth);
+            }
+            if (targetHeight > 0) {
+                cropIntent.putExtra("outputY", targetHeight);
+            }
+            if (targetHeight > 0 && targetWidth > 0 && targetWidth == targetHeight) {
+                cropIntent.putExtra("aspectX", 1);
+                cropIntent.putExtra("aspectY", 1);
+            }
+            // create new file handle to get full resolution crop
+            croppedUri = Uri.fromFile(createCaptureFile(this.encodingType, System.currentTimeMillis() + ""));
+            cropIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            cropIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            cropIntent.putExtra("output", croppedUri);
+
+
+            // start the activity - we handle returning in onActivityResult
+
+            if (this.cordova != null) {
+                this.cordova.startActivityForResult((CordovaPlugin) this,
+                        cropIntent, CROP_CAMERA + destType);
+            }
+        } catch (ActivityNotFoundException anfe) {
+            LOG.e(LOG_TAG, "Crop operation not supported on this device");
+            try {
+                processResultFromCamera(destType, cameraIntent);
+            }
+            catch (IOException e)
+            {
+                e.printStackTrace();
+                LOG.e(LOG_TAG, "Unable to write to file");
+            }
         }
-        if (targetHeight > 0) {
-          cropIntent.putExtra("outputY", targetHeight);
-        }
-        if (targetHeight > 0 && targetWidth > 0 && targetWidth == targetHeight) {
-          cropIntent.putExtra("aspectX", 1);
-          cropIntent.putExtra("aspectY", 1);
-        }
-        // create new file handle to get full resolution crop
-        croppedUri = Uri.fromFile(createCaptureFile(this.encodingType, System.currentTimeMillis() + ""));
-        cropIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        cropIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        cropIntent.putExtra("output", croppedUri);
-
-
-        // start the activity - we handle returning in onActivityResult
-
-        if (this.cordova != null) {
-            this.cordova.startActivityForResult((CordovaPlugin) this,
-                cropIntent, CROP_CAMERA + destType);
-        }
-    } catch (ActivityNotFoundException anfe) {
-      LOG.e(LOG_TAG, "Crop operation not supported on this device");
-      try {
-          processResultFromCamera(destType, cameraIntent);
-      }
-      catch (IOException e)
-      {
-          e.printStackTrace();
-          LOG.e(LOG_TAG, "Unable to write to file");
-      }
     }
-  }
 
     /**
      * Applies all needed transformation to the image received from the camera.
@@ -534,15 +535,15 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         // If sending filename back
         else if (destType == FILE_URI || destType == NATIVE_URI) {
             // If all this is true we shouldn't compress the image.
-            if (this.targetHeight == -1 && this.targetWidth == -1 && this.mQuality == 100 &&
-                    !this.correctOrientation) {
+            if (  !this.correctOrientation) {
 
                 // If we saved the uncompressed photo to the album, we can just
                 // return the URI we already created
                 if (this.saveToPhotoAlbum) {
                     this.callbackContext.success(galleryUri.toString());
                 } else {
-                    Uri uri = Uri.fromFile(createCaptureFile(this.encodingType, System.currentTimeMillis() + ""));
+                    String filename = System.currentTimeMillis() + "";
+                    Uri uri = Uri.fromFile(createCaptureFile(this.encodingType, filename));
 
                     if (this.allowEdit && this.croppedUri != null) {
                         Uri croppedUri = Uri.fromFile(new File(getFileNameFromUri(this.croppedUri)));
@@ -552,7 +553,57 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                         writeUncompressedImage(imageUri, uri);
                     }
 
-                    this.callbackContext.success(uri.toString());
+                    ///////////////////////////////////////////////////////
+                    //extra stuff
+                    String tb_filename = "s_" + tn_filename;
+                    bitmap = getScaledAndRotatedBitmap(sourcePath);
+                    // Double-check the bitmap.
+                    if (bitmap == null) {
+                        LOG.d(LOG_TAG, "I either have a null image path or bitmap");
+                        this.failPicture("Unable to create bitmap!");
+                        return;
+                    }
+
+                    Uri tb_uri = Uri.fromFile(createCaptureFile(this.encodingType, tb_filename));
+
+                    // Add compressed version of captured image to returned media store Uri
+                    OutputStream os = this.cordova.getActivity().getContentResolver().openOutputStream(tb_uri);
+                    CompressFormat compressFormat = encodingType == JPEG ?
+                            CompressFormat.JPEG :
+                            CompressFormat.PNG;
+
+                    bitmap.compress(compressFormat, 50, os);
+                    os.close();
+
+                    // Restore exif data to file
+                    if (this.encodingType == JPEG) {
+                        String exifPath;
+                        exifPath = uri.getPath();
+                        //We just finished rotating it by an arbitrary orientation, just make sure it's normal
+                        if(rotate != ExifInterface.ORIENTATION_NORMAL)
+                            exif.resetOrientation();
+                        exif.createOutFile(exifPath);
+                        exif.writeExifData();
+                    }
+
+                    JSONObject success = new JSONObject();
+                    JSONObject original = new JSONObject();
+                    JSONObject thumbnail = new JSONObject();
+                    original.put("uri", uri.toString() );
+                    original.put("dimensions", "" );
+
+                    thumbnail.put("uri", uri.toString() );
+                    thumbnail.put("dimensions", "" );
+
+
+                    success.put("original",original);
+                    success.put("thumbnail",thumbnail);
+                    JSONObject item = new JSONObject();
+
+                    // Send Uri back to JavaScript for viewing image
+                    this.callbackContext.success( success.toString() );
+
+                    //this.callbackContext.success(uri.toString());
                 }
             } else {
                 Uri uri = Uri.fromFile(createCaptureFile(this.encodingType, System.currentTimeMillis() + ""));
