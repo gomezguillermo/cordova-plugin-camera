@@ -555,7 +555,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
                     ///////////////////////////////////////////////////////
                     //extra stuff
-                    String tb_filename = "s_" + tn_filename;
+                    String tb_filename = "s_" + filename;
                     bitmap = getScaledAndRotatedBitmap(sourcePath);
                     // Double-check the bitmap.
                     if (bitmap == null) {
