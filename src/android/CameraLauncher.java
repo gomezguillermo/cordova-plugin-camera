@@ -586,22 +586,29 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                         exif.writeExifData();
                     }
 
-                    JSONObject success = new JSONObject();
-                    JSONObject original = new JSONObject();
-                    JSONObject thumbnail = new JSONObject();
-                    original.put("uri", uri.toString() );
-                    original.put("dimensions", "" );
+                    try {
+                        JSONObject success = new JSONObject();
+                        JSONObject original = new JSONObject();
+                        JSONObject thumbnail = new JSONObject();
+                        original.put("uri", uri.toString() );
+                        original.put("dimensions", "" );
 
-                    thumbnail.put("uri", uri.toString() );
-                    thumbnail.put("dimensions", "" );
+                        thumbnail.put("uri", uri.toString() );
+                        thumbnail.put("dimensions", "" );
 
 
-                    success.put("original",original);
-                    success.put("thumbnail",thumbnail);
-                    JSONObject item = new JSONObject();
+                        success.put("original",original);
+                        success.put("thumbnail",thumbnail);
+                        JSONObject item = new JSONObject();
 
-                    // Send Uri back to JavaScript for viewing image
-                    this.callbackContext.success( success.toString() );
+                        // Send Uri back to JavaScript for viewing image
+                        this.callbackContext.success(success.toString());
+                    } catch (JSONException e) {
+                        //some exception handler code.
+                        e.printStackTrace();
+                    }
+
+                    
 
                     //this.callbackContext.success(uri.toString());
                 }
