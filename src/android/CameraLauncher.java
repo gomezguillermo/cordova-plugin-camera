@@ -558,7 +558,8 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             } else {
 
                 String filename = System.currentTimeMillis() + "";
-                Uri uri = Uri.fromFile(createCaptureFile(this.encodingType, filename));
+                File file = createCaptureFile(this.encodingType, filename);
+                Uri uri = Uri.fromFile( file );
 
                 if (this.allowEdit && this.croppedUri != null) {
                     Uri croppedUri = Uri.fromFile(new File(getFileNameFromUri(this.croppedUri)));
@@ -586,7 +587,8 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                 }
 
                 String tb_filename = "s_" + filename;
-                Uri tb_uri = Uri.fromFile(createCaptureFile(this.encodingType, tb_filename + ""));
+                File tb_file = createCaptureFile(this.encodingType, tb_filename + "");
+                Uri tb_uri = Uri.fromFile(tb_file);
                 bitmap = getScaledAndRotatedBitmap(sourcePath);
 
                 // Double-check the bitmap.
@@ -643,12 +645,14 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     ori_dimensions.put("width", options.outWidth + "");
                     ori_dimensions.put("height", options.outHeight + "");
                     original.put("dimensions", ori_dimensions );
+                    original.put("size", file.length );
                     
                     thumbnail.put("path", tb_uri.toString() );
                     JSONObject tb_dimensions = new JSONObject();
                     tb_dimensions.put("width", tb_options.outWidth + "");
                     tb_dimensions.put("height", tb_options.outHeight + "");
                     thumbnail.put("dimensions", tb_dimensions );
+                    thumbnail.put("size", tb_file.length );
 
                     success.put("original",original);
                     success.put("thumbnail",thumbnail);
