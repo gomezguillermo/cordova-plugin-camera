@@ -1,4 +1,4 @@
-length()/*
+/*
        Licensed to the Apache Software Foundation (ASF) under one
        or more contributor license agreements.  See the NOTICE file
        distributed with this work for additional information
@@ -646,6 +646,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     ori_dimensions.put("height", options.outHeight + "");
                     original.put("dimensions", ori_dimensions );
                     original.put("size", file.length() );
+                    original.put("captureDate", filename );
                     
                     thumbnail.put("path", tb_uri.toString() );
                     JSONObject tb_dimensions = new JSONObject();
@@ -653,6 +654,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     tb_dimensions.put("height", tb_options.outHeight + "");
                     thumbnail.put("dimensions", tb_dimensions );
                     thumbnail.put("size", tb_file.length() );
+                    thumbnail.put("captureDate", filename );
 
                     success.put("original",original);
                     success.put("thumbnail",thumbnail);
