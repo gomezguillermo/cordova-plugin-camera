@@ -18,6 +18,7 @@
 */
 package org.apache.cordova.camera;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -51,7 +52,9 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.CompressFormat;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Matrix;
+import android.graphics.Paint;
 import android.media.ExifInterface;
 import android.media.MediaScannerConnection;
 import android.media.MediaScannerConnection.MediaScannerConnectionClient;
@@ -206,6 +209,20 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             callbackContext.sendPluginResult(r);
 
             return true;
+        } else if (action.equals("correctPerspective")) {
+            LOG.v(LOG_TAG, "correctPerspective() called.");
+
+            String srcUri = args.getString(0);
+            this.mQuality = args.getInt(1);
+
+            JSONArray cornersArray = args.getJSONArray(2);
+            float[] corners = new float[8];
+
+            for (int i = 0; i < cornersArray.length(); ++i) {
+                corners[i] = (float) cornersArray.getDouble(i);
+            }
+
+            this.correctPerspective(srcUri, corners);
         }
         return false;
     }
@@ -229,6 +246,132 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         // Create the cache directory if it doesn't exist
         cache.mkdirs();
         return cache.getAbsolutePath();
+    }
+
+    private void correctPerspective(String srcUri, float[] srcPoints) {
+        int rotate = 0;
+
+        // Create an ExifHelper to save the exif data that is lost during compression
+        ExifHelper exif = new ExifHelper();
+
+        File fileInput = new File( FileHelper.stripFileProtocol( srcUri ) );
+        Uri uriInput = Uri.fromFile( fileInput );
+
+        if (this.encodingType == JPEG) {
+            try {
+                //We don't support PNG, so let's not pretend we do
+                exif.createInFile( FileHelper.stripFileProtocol( srcUri ) );
+                exif.readExifData();
+                rotate = exif.getOrientation();
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        InputStream fileStream = null;
+
+        try {
+            fileStream = FileHelper.getInputStreamFromUriString( uriInput.toString(), cordova);
+            Bitmap bitmap = BitmapFactory.decodeStream(fileStream);
+
+            float nw = Math.max(srcPoints[6] - srcPoints[0], srcPoints[4] - srcPoints[2]);
+            float nh = Math.max(srcPoints[3] - srcPoints[1], srcPoints[5] - srcPoints[7]);
+
+            float[] dstPoints = {0, 0, 0, nh, nw, nh, nw, 0};
+
+            Bitmap bitmapCorrected = Bitmap.createBitmap((int)nw, (int)nh, Bitmap.Config.ARGB_8888);
+            Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            Canvas canvas = new Canvas(bitmapCorrected);
+            Matrix matrix = new Matrix();
+            matrix.setPolyToPoly(srcPoints, 0, dstPoints, 0, 4);
+            canvas.drawBitmap(bitmap, matrix, paint);
+
+
+            File fileOutput = new File( FileHelper.stripFileProtocol( srcUri ));
+            Uri uriOutput = Uri.fromFile(fileOutput);
+
+            // Add compressed version of captured image to returned media store Uri
+            OutputStream os = this.cordova.getActivity().getContentResolver().openOutputStream(uriOutput);
+            CompressFormat compressFormat = encodingType == JPEG ?
+                    CompressFormat.JPEG :
+                    CompressFormat.PNG;
+
+            bitmapCorrected.compress(compressFormat, 90, os);
+            os.close();
+
+            // Restore exif data to file
+            if (this.encodingType == JPEG) {
+                String exifPath;
+                exifPath = fileOutput.getPath();
+                //We just finished rotating it by an arbitrary orientation, just make sure it's normal
+                if(rotate != ExifInterface.ORIENTATION_NORMAL)
+                    exif.resetOrientation();
+                exif.createOutFile(exifPath);
+                exif.writeExifData();
+            }
+
+            // generate thumbnail
+            Bitmap bitmap_small = getScaledAndRotatedBitmap( FileHelper.stripFileProtocol( srcUri ) );
+
+            File fileSmallOutput = createCaptureFile(this.encodingType, fileInput.getName().replaceFirst("[.][^.]+$", "") + "_small" );;
+            Uri uriSmallOutput = Uri.fromFile(fileSmallOutput);
+
+            // Add compressed version of captured image to returned media store Uri
+            OutputStream smallOS = this.cordova.getActivity().getContentResolver().openOutputStream( uriSmallOutput );
+            bitmap_small.compress(compressFormat, this.mQuality, smallOS);
+            smallOS.close();
+
+            // figure out the thumbnail width and height of the image
+            BitmapFactory.Options small_options = new BitmapFactory.Options();
+            small_options.inJustDecodeBounds = true;
+            InputStream small_fileStream = null;
+            try {
+                small_fileStream = FileHelper.getInputStreamFromUriString(uriSmallOutput.toString(), cordova);
+                BitmapFactory.decodeStream(small_fileStream, null, small_options);
+            } finally {
+                if (small_fileStream != null) {
+                    try {
+                        small_fileStream.close();
+                    } catch (IOException e) {
+                        LOG.d(LOG_TAG, "Exception while closing file input stream.");
+                    }
+                }
+            }
+
+
+            JSONObject success = new JSONObject();
+            JSONObject original = new JSONObject();
+            JSONObject thumbnail = new JSONObject();
+
+            JSONObject ori_dimensions = new JSONObject();
+            ori_dimensions.put("width", nw + "");
+            ori_dimensions.put("height", nh + "");
+            original.put("dimensions", ori_dimensions );
+            original.put("size", fileOutput.length() );
+
+            JSONObject tb_dimensions = new JSONObject();
+            tb_dimensions.put("width", small_options.outWidth + "");
+            tb_dimensions.put("height", small_options.outHeight + "");
+            thumbnail.put("dimensions", tb_dimensions );
+
+            success.put("original",original);
+            success.put("thumbnail",thumbnail);
+
+            // Send Uri back to JavaScript for viewing image
+            this.callbackContext.success(success.toString());
+
+        } catch (Exception ex) {
+            throw new IllegalStateException();
+        } finally {
+            try {
+                if (fileStream != null) {
+                    fileStream.close();
+                }
+            } catch (Exception ex) {
+
+            }
+        }
     }
 
     /**
@@ -586,7 +729,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     }
                 }
 
-                String tb_filename = "s_" + filename;
+                String tb_filename = filename + "_small";
                 File tb_file = createCaptureFile(this.encodingType, tb_filename + "");
                 Uri tb_uri = Uri.fromFile(tb_file);
                 bitmap = getScaledAndRotatedBitmap(sourcePath);
@@ -606,17 +749,6 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
                 bitmap.compress(compressFormat, this.mQuality, os);
                 os.close();
-
-                // Restore exif data to file
-                if (this.encodingType == JPEG) {
-                    String exifPath;
-                    exifPath = uri.getPath();
-                    //We just finished rotating it by an arbitrary orientation, just make sure it's normal
-                    if(rotate != ExifInterface.ORIENTATION_NORMAL)
-                        exif.resetOrientation();
-                    exif.createOutFile(exifPath);
-                    exif.writeExifData();
-                }
 
                 // figure out the thumbnail width and height of the image
                 BitmapFactory.Options tb_options = new BitmapFactory.Options();
@@ -647,24 +779,22 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     original.put("dimensions", ori_dimensions );
                     original.put("size", file.length() );
                     original.put("captureDate", System.currentTimeMillis() );
-                    
+
                     thumbnail.put("path", tb_uri.toString() );
                     JSONObject tb_dimensions = new JSONObject();
                     tb_dimensions.put("width", tb_options.outWidth + "");
                     tb_dimensions.put("height", tb_options.outHeight + "");
                     thumbnail.put("dimensions", tb_dimensions );
-                    thumbnail.put("size", tb_file.length() );
-                    thumbnail.put("captureDate", System.currentTimeMillis() );
 
                     success.put("original",original);
                     success.put("thumbnail",thumbnail);
 
                     // Send Uri back to JavaScript for viewing image
                     this.callbackContext.success(success.toString());
-                    
+
                 } catch (JSONException e) {
                     //some exception handler code.
-                    e.printStackTrace();
+                    throw new IllegalStateException();
                 }
 
                 // Send Uri back to JavaScript for viewing image
