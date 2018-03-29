@@ -182,4 +182,18 @@ cameraExport.cleanup = function (successCallback, errorCallback) {
     exec(successCallback, errorCallback, 'Camera', 'cleanup', []);
 };
 
+cameraExport.correctPerspective = function(successCallback, errorCallback, options ) {
+    options = options || {};
+
+    var getValue = argscheck.getValue;
+
+     var uri = getValue(options.uri, null);
+     var quality = getValue(options.quality, 50);
+     var corners = getValue(options.corners, []);
+
+     var args = [uri,quality, corners];
+
+     exec(successCallback, errorCallback, 'Camera', 'correctPerspective', args);
+};
+
 module.exports = cameraExport;
