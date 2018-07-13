@@ -287,7 +287,8 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             matrix.setPolyToPoly(srcPoints, 0, dstPoints, 0, 4);
             canvas.drawBitmap(bitmap, matrix, paint);
 
-            File fileOutput = createCaptureFile(this.encodingType, fileInput.getName().replaceFirst("[.][^.]+$", "") + "_fixed" );
+
+            File fileOutput = new File( FileHelper.stripFileProtocol( srcUri ));
             Uri uriOutput = Uri.fromFile(fileOutput);
 
             // Add compressed version of captured image to returned media store Uri
@@ -311,9 +312,9 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             }
 
             // generate thumbnail
-            Bitmap bitmap_small = getScaledAndRotatedBitmap( FileHelper.stripFileProtocol( fileOutput.getPath() ) );
+            Bitmap bitmap_small = getScaledAndRotatedBitmap( FileHelper.stripFileProtocol( srcUri ) );
 
-            File fileSmallOutput = createCaptureFile(this.encodingType, fileInput.getName().replaceFirst("[.][^.]+$", "") + "_fixed_small" );
+            File fileSmallOutput = createCaptureFile(this.encodingType, fileInput.getName().replaceFirst("[.][^.]+$", "") + "_small" );;
             Uri uriSmallOutput = Uri.fromFile(fileSmallOutput);
 
             // Add compressed version of captured image to returned media store Uri
@@ -338,6 +339,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                 }
             }
 
+
             JSONObject success = new JSONObject();
             JSONObject original = new JSONObject();
             JSONObject thumbnail = new JSONObject();
@@ -345,14 +347,12 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             JSONObject ori_dimensions = new JSONObject();
             ori_dimensions.put("width", nw + "");
             ori_dimensions.put("height", nh + "");
-            original.put("path", uriOutput.toString() );
             original.put("dimensions", ori_dimensions );
             original.put("size", fileOutput.length() );
 
             JSONObject tb_dimensions = new JSONObject();
             tb_dimensions.put("width", small_options.outWidth + "");
             tb_dimensions.put("height", small_options.outHeight + "");
-            thumbnail.put("path", uriSmallOutput.toString() );
             thumbnail.put("dimensions", tb_dimensions );
 
             success.put("original",original);
