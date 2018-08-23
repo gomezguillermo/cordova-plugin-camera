@@ -223,6 +223,13 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             }
 
             this.correctPerspective(srcUri, corners);
+        }  else if (action.equals("normalizePicture")) {
+            LOG.v(LOG_TAG, "normalizePicture() called.");
+
+            String srcUri = args.getString(0);
+            int orientation = args.getInt(1);
+
+            this.normalizePicture(srcUri, orientation);
         }
         return false;
     }
@@ -247,6 +254,71 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         // Create the cache directory if it doesn't exist
         cache.mkdirs();
         return cache.getAbsolutePath();
+    }
+
+    private void normalizePicture( String srcUri, int orientation ) {
+
+        File fileInput = new File( FileHelper.stripFileProtocol( srcUri ) );
+
+        // Create an ExifHelper to save the exif data that is lost during compression
+        ExifHelper exif = new ExifHelper();
+
+        if ( orientation == 0 ) {
+            this.callbackContext.success( srcUri );
+        } else {
+            InputStream fileStream = null;
+
+            LOG.d(LOG_TAG, "orientation-> " + orientation );
+
+            try {
+                fileStream = FileHelper.getInputStreamFromUriString( srcUri, cordova);
+                Bitmap bitmap = BitmapFactory.decodeStream(fileStream);
+
+                Matrix matrix = new Matrix();
+                matrix.postRotate( orientation );
+
+                Bitmap bitmapRotated = Bitmap.createBitmap(bitmap , 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+
+
+                File fileRotated = new File( getTempDirectoryPath(), fileInput.getName() );
+                Uri uriRotated = Uri.fromFile(fileRotated);
+
+                CompressFormat compressFormat = encodingType == JPEG ?
+                        CompressFormat.JPEG :
+                        CompressFormat.PNG;
+
+                // Add compressed version of captured image to returned media store Uri
+                OutputStream osRotated = this.cordova.getActivity().getContentResolver().openOutputStream(uriRotated);
+                bitmapRotated.compress(compressFormat, 90, osRotated);
+                osRotated.close();
+
+                if ( this.encodingType == JPEG) {
+                    try {
+                        exif.resetOrientation();
+                        exif.createOutFile(fileRotated.getPath());
+                        exif.writeExifData();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                this.callbackContext.success( srcUri );
+
+            }  catch (OutOfMemoryError e) {
+                callbackContext.error(e.getLocalizedMessage());
+            } catch (Exception e){
+                callbackContext.error(e.getLocalizedMessage());
+            } finally {
+                try {
+                    if (fileStream != null) {
+                        fileStream.close();
+                    }
+                } catch (Exception ex) {
+                    callbackContext.error(ex.getLocalizedMessage());
+                    ex.printStackTrace();
+                }
+            }
+        }
     }
 
     private void correctPerspective(String srcUri, float[] srcPoints) {
@@ -276,10 +348,23 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             fileStream = FileHelper.getInputStreamFromUriString( uriInput.toString(), cordova);
             Bitmap bitmap = BitmapFactory.decodeStream(fileStream);
 
+            int w = bitmap.getWidth();
+            int h = bitmap.getHeight();
+
+            if ( rotate == 90 ) {
+                srcPoints = new float[]{ srcPoints[7], h - srcPoints[6], srcPoints[1], h - srcPoints[0], srcPoints[3], h - srcPoints[2], srcPoints[5], h - srcPoints[4] };
+            } else if ( rotate == 180 ) {
+                srcPoints = new float[]{ w - srcPoints[4], h - srcPoints[5], w - srcPoints[6], h - srcPoints[7], w - srcPoints[0], h - srcPoints[1], w - srcPoints[2], h - srcPoints[3] };
+            } else if ( rotate == 270 ) {
+                srcPoints = new float[]{ w - srcPoints[3], srcPoints[2], w - srcPoints[5], srcPoints[4], w - srcPoints[7], srcPoints[6], w - srcPoints[1], srcPoints[0] };
+            }
+
             float nw = Math.max(srcPoints[6] - srcPoints[0], srcPoints[4] - srcPoints[2]);
             float nh = Math.max(srcPoints[3] - srcPoints[1], srcPoints[5] - srcPoints[7]);
 
-            float[] dstPoints = {0, 0, 0, nh, nw, nh, nw, 0};
+            float[] dstPoints = new float[]{0, 0, 0, nh, nw, nh, nw, 0};
+
+            //LOG.d(LOG_TAG, "src rotated-> " + srcPoints[0] + ",     " + srcPoints[1] + ",     " + srcPoints[2] + ",    " + srcPoints[3] + ",    " + srcPoints[4] + ",    " + srcPoints[5]+ ",    " + srcPoints[6]+ ",    " + srcPoints[7] );
 
             Bitmap bitmapCorrected = Bitmap.createBitmap((int)nw, (int)nh, Bitmap.Config.ARGB_8888);
             Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -302,12 +387,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
             // Restore exif data to file
             if (this.encodingType == JPEG) {
-                String exifPath;
-                exifPath = fileOutput.getPath();
-                //We just finished rotating it by an arbitrary orientation, just make sure it's normal
-                if(rotate != ExifInterface.ORIENTATION_NORMAL)
-                    exif.resetOrientation();
-                exif.createOutFile(exifPath);
+                exif.createOutFile(fileOutput.getPath());
                 exif.writeExifData();
             }
 
@@ -344,8 +424,14 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             JSONObject thumbnail = new JSONObject();
 
             JSONObject ori_dimensions = new JSONObject();
-            ori_dimensions.put("width", nw + "");
-            ori_dimensions.put("height", nh + "");
+            if ( rotate == 90 || rotate == 270 ) {
+                ori_dimensions.put("width", nh + "");
+                ori_dimensions.put("height", nw + "");
+            } else {
+                ori_dimensions.put("width", nw + "");
+                ori_dimensions.put("height", nh + "");
+            }
+            original.put("orientation", rotate );
             original.put("path", uriOutput.toString() );
             original.put("dimensions", ori_dimensions );
             original.put("size", fileOutput.length() );
@@ -733,10 +819,10 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                 String tb_filename = filename + "_small";
                 File tb_file = createCaptureFile(this.encodingType, tb_filename + "");
                 Uri tb_uri = Uri.fromFile(tb_file);
-                bitmap = getScaledAndRotatedBitmap(sourcePath);
+                Bitmap tb_bitmap = getScaledAndRotatedBitmap(sourcePath);
 
                 // Double-check the bitmap.
-                if (bitmap == null) {
+                if (tb_bitmap == null) {
                     LOG.d(LOG_TAG, "I either have a null image path or bitmap");
                     this.failPicture("Unable to create bitmap!");
                     return;
@@ -748,7 +834,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                         CompressFormat.JPEG :
                         CompressFormat.PNG;
 
-                bitmap.compress(compressFormat, this.mQuality, os);
+                tb_bitmap.compress(compressFormat, this.mQuality, os);
                 os.close();
 
                 // figure out the thumbnail width and height of the image
@@ -768,12 +854,12 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                     }
                 }
 
-                if (this.encodingType == JPEG) {
-                    String exifPath = tb_file.getPath();
-                    //We just finished rotating it by an arbitrary orientation, just make sure it's normal
-                    exif.createOutFile(exifPath);
-                    exif.writeExifData();
-                }
+//                if (this.encodingType == JPEG) {
+//                    String exifPath = tb_file.getPath();
+//                    //We just finished rotating it by an arbitrary orientation, just make sure it's normal
+//                    exif.createOutFile(exifPath);
+//                    exif.writeExifData();
+//                }
 
                 try {
                     JSONObject success = new JSONObject();
@@ -782,8 +868,14 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
                     original.put("path", uri.toString() );
                     JSONObject ori_dimensions = new JSONObject();
-                    ori_dimensions.put("width", options.outWidth + "");
-                    ori_dimensions.put("height", options.outHeight + "");
+                    if ( rotate == 90 || rotate == 270 ) {
+                        ori_dimensions.put("width", options.outHeight + "");
+                        ori_dimensions.put("height", options.outWidth + "");
+                    } else {
+                        ori_dimensions.put("width", options.outWidth + "");
+                        ori_dimensions.put("height", options.outHeight + "");
+                    }
+                    original.put("orientation", rotate );
                     original.put("dimensions", ori_dimensions );
                     original.put("size", file.length() );
                     original.put("captureDate", System.currentTimeMillis() );
@@ -808,6 +900,8 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
                 // Send Uri back to JavaScript for viewing image
                 //this.callbackContext.success(uri.toString());
 
+                tb_bitmap = null;
+
             }
         } else {
             throw new IllegalStateException();
@@ -815,6 +909,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
 
         this.cleanup(FILE_URI, this.imageUri.getFileUri(), galleryUri, bitmap);
         bitmap = null;
+        exif = null;
     }
 
     private String getPicturesPath() {
